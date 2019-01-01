@@ -1,0 +1,157 @@
+local terrain = require "snowball_terrain"
+local polygon = require "snowball_terrain_polygon"
+
+function data()
+	return {
+		type = "ASSET_DEFAULT",
+		buildMode = "MULTI",
+		categories = {"tree"},
+		availability = {
+			yearFrom = 244,
+			yearTo = 245
+		},
+		description = {
+			name = _("patch_title"),
+			description = _("patch_description")
+		},
+		order = 197720902,
+		skipCollision = false,
+		autoRemovable = true,
+		params = {},
+		updateFn = function(params)
+			local result = {
+				models = {},
+				cost = 10,
+				bulldozeCost = 10,
+				maintenanceCost = 0
+			}
+
+			result.models[#result.models + 1] = {
+				id = "asset/snowball_terrain_finisher.mdl",
+				transf = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1}
+			}
+
+			if not params.points or not params.material or not params.height or not params.texture_scan or not params.ground_scan then
+				return result
+			end
+
+			local points = params.points
+			local texture_scan = params.texture_scan
+			local ground_scan = params.ground_scan
+			local height = params.height * ground_scan
+			local overlay = params.overlay
+			local bounds = polygon.getBounds(points)
+			local ix = math.ceil(bounds.x)
+			local iy = math.ceil(bounds.y)
+			local w = math.floor(bounds.width / ground_scan)
+			local h = math.floor(bounds.height / ground_scan)
+
+			local inside = {}
+
+			for y = 0, h do
+				for x = 0, w do
+					if not inside[x] then
+						inside[x] = {}
+					end
+
+					inside[x][y] = polygon.contains(points, {x * ground_scan + ix, y * ground_scan + iy}, bounds)
+				end
+			end
+
+			local heights = {}
+
+			for y = 0, h do
+				for x = 0, w do
+					if not heights[x] then
+						heights[x] = {}
+					end
+
+					if (inside[x][y]) then
+						heights[x][y] = game.interface.getHeight({x * ground_scan + ix, y * ground_scan + iy})
+					end
+				end
+			end
+
+			local folder = string.sub(terrain.getFolderName(debug.getinfo(1, "S").source), 2)
+			local fileName = folder .. params.material .. ".tga"
+
+			local map = terrain.createDisplacementMap(fileName)
+
+			local faces = {}
+
+			local mapHeight = map.max - map.min
+			local mapHeightFactor = 1 / mapHeight
+
+			local tx = ix % 1024;
+			local ty = iy % 1024;
+
+			local function getPoint(x, y)
+				if inside[x][y] then
+					return {
+						x * ground_scan + ix,
+						y * ground_scan + iy,
+						heights[x][y] +
+							((map.data[((x + tx) * texture_scan) % map.w + 1][((y + ty) * texture_scan) % map.h + 1] - map.average) * mapHeightFactor) *
+								height
+					}
+				end
+
+				return nil
+			end
+
+			for y = 0, h - 1 do
+				for x = 0, w - 1 do
+					local p1 = getPoint(x, y)
+					local p2 = getPoint(x + 1, y)
+					local p3 = getPoint(x + 1, y + 1)
+					local p4 = getPoint(x, y + 1)
+
+					if (p1 and p2 and p3) then
+						faces[#faces + 1] = {p1, p2, p3}
+					end
+
+					if (p1 and p3 and p4) then
+						faces[#faces + 1] = {p1, p3, p4}
+					end
+				end
+			end
+			result.terrainAlignmentLists = {
+				{
+					type = "EQUAL",
+					faces = faces,
+					slopeLow = 10.0,
+					slopeHigh = 10.0
+				}
+			}
+
+			if overlay then
+				print("doing the overlay " .. params.material .. " with " .. #points)
+			else
+				print("no overlay")
+			end
+
+			if overlay then
+				for i = 1, #points do
+					result.models[#result.models + 1] = {
+						id = "asset/snowball_terrain_suspensor.mdl",
+						transf = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, points[i][1], points[i][2], points[i][3] - 0.5, 1}
+					}
+				end
+
+				result.groundFaces = {
+					{
+						face = points,
+						modes = {
+							{
+								type = "FILL", -- accepted values: "FILL", "STROKE", "STROKE_INNER" and "STROKE_OUTER"
+								key = params.material -- ground texture, see res/config/ground_texture/
+							}
+						}
+					}
+				}
+			end
+
+			return result
+		end
+	}
+end

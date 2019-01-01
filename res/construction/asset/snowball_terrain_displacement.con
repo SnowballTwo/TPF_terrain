@@ -1,0 +1,107 @@
+local terrain = require "snowball_terrain"
+
+local modes = {"plan", "plant", "reset"}
+local materials = {"snowball_terrain_rock", "karst", "heath", "slate", "snowball_terrain_dunes"}
+local texture_densities = {1, 2, 4, 8, 12, 16, 24}
+local ground_densities = { 1, 2, 4, 8, 12, 16, 24}
+local heights = {4, 8, 16, 24, 36, 48, 72}
+
+function data()
+	return {
+		type = "ASSET_DEFAULT",
+		buildMode = "MULTI",
+		categories = {"tree"},
+		availability = {
+			yearFrom = 0,
+			yearTo = 0
+		},
+		description = {
+			name = _("snowball_terrain_displacement_title"),
+			description = _("snowball_terrain_displacement_description")
+		},
+		order = 197720901,
+		skipCollision = true,
+		autoRemovable = true,
+		params = {
+			{
+				key = "mode",
+				name = _("mode"),
+				values = {_("plan"), _("plant"), _("reset")},
+				defaultIndex = 0
+			},	
+			{
+				key = "snowball_terrain_displacement_material",
+				name = _("snowball_terrain_displacement_material"),
+				values = {
+					_("snowball_terrain_displacement_material_rock"),
+					_("snowball_terrain_displacement_material_karst"), 
+					_("snowball_terrain_displacement_material_heath"),
+					_("snowball_terrain_displacement_material_slate"),
+					_("snowball_terrain_displacement_material_dunes")
+				},
+				defaultIndex = 0
+			},	
+			{
+				key = "snowball_terrain_displacement_texture_scan",
+				name = _("snowball_terrain_displacement_texture_scan"),
+				values = {"1","2","4","8","12", "16", "24"},
+				defaultIndex = 2
+			},
+			{
+				key = "snowball_terrain_displacement_ground_scan",
+				name = _("snowball_terrain_displacement_ground_scan"),
+				values = {"1","2","4","8","12", "16", "24"},
+				defaultIndex = 0
+			},
+			{
+				key = "snowball_terrain_displacement_height",
+				name = _("snowball_terrain_displacement_height"),
+				values = {"4", "8", "16", "24", "36", "48", "72"},
+				defaultIndex = 3
+			},
+			{
+				key = "snowball_terrain_overlay",
+				name = _("snowball_terrain_overlay"),
+				values = {"no", "yes"},
+				defaultIndex = 0
+			},				
+		},
+		updateFn = function(params)
+			local result = {
+				models = {},
+				cost = 10,
+				bulldozeCost = 10,
+				maintenanceCost = 0
+			}
+			local mode = modes[params.mode + 1]
+			local material = materials[params.snowball_terrain_displacement_material + 1]	
+			local texture_scan = texture_densities[params.snowball_terrain_displacement_texture_scan + 1]
+			local ground_scan = ground_densities[params.snowball_terrain_displacement_ground_scan + 1]		
+			local height = heights[params.snowball_terrain_displacement_height + 1]	
+			local overlay = params.snowball_terrain_overlay == 1			
+			result.models = {}
+
+			if mode == "plan" then
+				terrain.plan( result, ground_scan )
+			elseif mode == "reset" then
+				terrain.reset( result )
+			elseif mode == "plant" then
+				terrain.plant( result, material, height, texture_scan, ground_scan, overlay )
+				
+			else
+				error("Planter: invalid operation ", mode)
+			end
+
+			result.terrainAlignmentLists = {
+				{
+					type = "EQUAL",
+					faces = {},
+					slopeLow = 10.0,
+					slopeHigh = 10.0
+				}
+			}
+
+			return result
+		end
+	}
+end
